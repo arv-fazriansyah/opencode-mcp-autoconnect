@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-orange.svg)](https://github.com/anomalyco/opencode)
 
-> **Keywords / SEO:** Model Context Protocol, MCP server reconnect, OpenCode plugin, fix MCP timeout, auto reconnect MCP, MCP auto start, OpenCode extension, stdio server timeout fix, rclone-mcp fix, AI coding assistant plugin.
+> **About:** Looking for an **OpenCode plugin** to **auto reconnect MCP** servers and **fix MCP timeout** issues? This tool implements the **Model Context Protocol** to **fix stdio server timeout**, resolve **rclone-mcp** connection errors, and ensure stable **MCP server reconnect** functionality during startup.
 
 A lightweight, production-ready **OpenCode plugin** engineered to **automatically detect and reconnect failed MCP (Model Context Protocol) servers** during startup and active sessions. Say goodbye to permanent startup failures caused by slow `npx`, `uv` cold starts, or strict internal limits.
 
