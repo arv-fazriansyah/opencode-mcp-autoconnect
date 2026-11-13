@@ -21,23 +21,21 @@ When an OpenCode location boots up, it initializes all enabled MCP servers simul
 
 ---
 
-## Installation
+## 🚀 Quick Install (Plug & Play)
 
-### Global Installation (Recommended)
-Copy `mcp-autoconnect.ts` into your global OpenCode plugins directory:
-```bash
-mkdir -p ~/.config/opencode/plugins
-# Save mcp-autoconnect.ts into ~/.config/opencode/plugins/mcp-autoconnect.ts
+No manual copying required! Choose your platform below to install instantly:
+
+### PowerShell (Windows)
+Run this command in PowerShell:
+```powershell
+iex (iwr -useb https://raw.githubusercontent.com/arv-fazriansyah/opencode-mcp-autoconnect/main/install.ps1).Content
 ```
 
-### Project-Specific Installation
-Copy `mcp-autoconnect.ts` into your workspace `.opencode` directory:
+### Bash (Linux / macOS)
+Run this command in your terminal:
 ```bash
-mkdir -p .opencode/plugins
-# Save mcp-autoconnect.ts into .opencode/plugins/mcp-autoconnect.ts
+curl -fsSL https://raw.githubusercontent.com/arv-fazriansyah/opencode-mcp-autoconnect/main/install.sh | bash
 ```
-
-*Note: OpenCode automatically discovers plugins placed in the `plugins/` directory—no additional configuration required.*
 
 ---
 
