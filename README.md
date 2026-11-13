@@ -1,113 +1,66 @@
-# opencode-mcp-autoconnect
+# OpenCode MCP Autoconnect
 
-An OpenCode plugin that **auto-reconnects MCP servers that fail at startup**.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-orange.svg)](https://github.com/anomalyco/opencode)
 
-## Why
+A lightweight OpenCode plugin designed to **automatically detect and reconnect failed MCP (Model Context Protocol) servers** at startup or during runtime.
 
-When a Location boots, OpenCode starts every enabled MCP server at once. Local
-stdio servers (npx/uv cold starts, or `rclone-mcp` with its 15 s internal
-limit) can run past the startup timeout and stay `failed` forever. See
-[anomalyco/opencode#63512](https://github.com/anomalyco/opencode/issues/63512)
-and [#53226](https://github.com/anomalyco/opencode/issues/53226).
+---
 
-OpenCode currently has no built-in retry for this case (only remote transport
-drops are reconnected). This plugin fills the gap.
+## The Problem
 
-## Install
+When an OpenCode location boots up, it initializes all enabled MCP servers simultaneously. Local stdio servers—such as `npx`/`uv` cold starts or heavy servers like `rclone-mcp` with strict internal initialization limits—frequently exceed OpenCode's startup timeout window. Consequently, these servers remain stuck in a permanently `failed` state ([anomalyco/opencode#63512](https://github.com/anomalyco/opencode/issues/63512), [#53226](https://github.com/anomalyco/opencode/issues/53226)).
 
-Copy the single file into the OpenCode plugins directory:
+## The Solution
 
-```sh
-# global (all projects)
-cp mcp-autoconnect.ts ~/.config/opencode/plugins/mcp-autoconnect.ts
+`mcp-autoconnect` continuously monitors your MCP server health in the background. If a server goes down or fails to connect during startup:
+1. **Intelligent Polling**: Periodically inspects server status via `ctx.mcp.list()`.
+2. **Exponential Backoff**: Gradually retries failed connections using a safe backoff schedule (from 15s up to 8 minutes) to prevent system resource saturation.
+3. **Automatic Reconnection**: Triggers the experimental connect endpoint via OpenCode API (`/api/experimental/mcp/:server/connect`).
+4. **Cross-Platform Logging**: Gracefully records lifecycle events and connection attempts inside the OS temporary directory (`<os temp>/opencode/mcp-autoconnect.log`).
 
-# or per-project
-cp mcp-autoconnect.ts .opencode/plugins/mcp-autoconnect.ts
+---
+
+## Installation
+
+### Global Installation (Recommended)
+Copy `mcp-autoconnect.ts` into your global OpenCode plugins directory:
+```bash
+mkdir -p ~/.config/opencode/plugins
+# Save mcp-autoconnect.ts into ~/.config/opencode/plugins/mcp-autoconnect.ts
 ```
 
-OpenCode discovers `.ts` files in `~/.config/opencode/plugins/` and
-`.opencode/plugins/` automatically — no config change needed. Reload happens
-automatically; or force it with `touch` on the file / `opencode service restart`.
+### Project-Specific Installation
+Copy `mcp-autoconnect.ts` into your workspace `.opencode` directory:
+```bash
+mkdir -p .opencode/plugins
+# Save mcp-autoconnect.ts into .opencode/plugins/mcp-autoconnect.ts
+```
 
-## How it works
+*Note: OpenCode automatically discovers plugins placed in the `plugins/` directory—no additional configuration required.*
 
-- Every 30 s (first check 15 s after load), reads `ctx.mcp.list()`.
-- For each server with status `failed`, waits with backoff
-  (15s → 30s → 60s → 120s → 240s → 480s) then calls
-  `POST /api/experimental/mcp/{server}/connect` via the `opencode api` CLI,
-  which reuses OpenCode's own service discovery and auth.
-- Up to 6 attempts per server, then a 10-minute cooldown before retrying
-  again. A successful reconnect resets the counter.
-- Logs to `<os temp>/opencode/mcp-autoconnect.log`.
+---
 
-## Limitations
+## Configuration & Backoff Strategy
 
-- Uses the **experimental** connect endpoint; if a future OpenCode version
-  changes it, the plugin will log failures (check the log).
-- Cannot distinguish "permanently misconfigured" from "slow to start": both
-  get retried up to 6 times.
-- Only retries servers that report status `failed`; servers that silently drop
-  later (still marked `connected`) are not covered (see #29190).
+| Parameter | Default Value | Description |
+| :--- | :--- | :--- |
+| **Check Interval (`TICK_MS`)** | `30,000ms` (30s) | Frequency of MCP status polling. |
+| **Initial Delay** | `15,000ms` (15s) | Grace period after boot before the first check. |
+| **Max Attempts** | `6` attempts | Maximum reconnect retries before entering temporary cooldown. |
+| **Cooldown Period** | `10 minutes` | Time to wait before resetting retry counters for persistent failures. |
+| **Backoff Schedule** | `15s`, `30s`, `1m`, `2m`, `4m`, `8m` | Incremental delay between reconnection attempts. |
+
+---
+
+## Log Output
+
+All operations and diagnostics are logged safely across platforms (Windows, macOS, Linux) at:
+* **Linux/macOS:** `/tmp/opencode/mcp-autoconnect.log`
+* **Windows:** `%TEMP%\\opencode\\mcp-autoconnect.log`
+
+---
 
 ## License
 
-MIT
-```
-
-Also maybe a small install script. Keep it minimal.
-
-Let me write README.<|end|><|start|>starter to=write<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="content">
-# opencode-mcp-autoconnect
-
-An OpenCode plugin that **auto-reconnects MCP servers that fail at startup**.
-
-## Why
-
-When a Location boots, OpenCode starts every enabled MCP server at once. Local
-stdio servers (npx/uv cold starts, or `rclone-mcp` with its 15 s internal
-limit) can run past the startup timeout and stay `failed` forever. See
-[anomalyco/opencode#63512](https://github.com/anomalyco/opencode/issues/63512)
-and [#53226](https://github.com/anomalyco/opencode/issues/53226).
-
-OpenCode currently has no built-in retry for this case (only remote transport
-drops are reconnected). This plugin fills the gap.
-
-## Install
-
-Copy the single file into the OpenCode plugins directory:
-
-```sh
-# global (all projects)
-cp mcp-autoconnect.ts ~/.config/opencode/plugins/mcp-autoconnect.ts
-
-# or per-project
-cp mcp-autoconnect.ts .opencode/plugins/mcp-autoconnect.ts
-```
-
-OpenCode discovers `.ts` files in `~/.config/opencode/plugins/` and
-`.opencode/plugins/` automatically — no config change needed. Reload happens
-automatically; or force it with `touch` on the file / `opencode service restart`.
-
-## How it works
-
-- Every 30 s (first check 15 s after load), reads `ctx.mcp.list()`.
-- For each server with status `failed`, waits with backoff
-  (15s → 30s → 60s → 120s → 240s → 480s) then calls
-  `POST /api/experimental/mcp/{server}/connect` via the `opencode api` CLI,
-  which reuses OpenCode's own service discovery and auth.
-- Up to 6 attempts per server, then a 10-minute cooldown before retrying
-  again. A successful reconnect resets the counter.
-- Logs to `<os temp>/opencode/mcp-autoconnect.log`.
-
-## Limitations
-
-- Uses the **experimental** connect endpoint; if a future OpenCode version
-  changes it, the plugin will log failures (check the log).
-- Cannot distinguish "permanently misconfigured" from "slow to start": both
-  get retried up to 6 times.
-- Only retries servers that report status `failed`; servers that silently drop
-  later (still marked `connected`) are not covered (see #29190).
-
-## License
-
-MIT
+This project is licensed under the [MIT License](LICENSE).
