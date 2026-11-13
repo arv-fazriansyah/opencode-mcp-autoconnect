@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * OpenCode plugin: auto-reconnect MCP servers that fail at startup.
@@ -16,9 +18,12 @@ import { appendFileSync } from "node:fs";
  *
  * Log: <os temp>/opencode/mcp-autoconnect.log
  */
-const LOG = "C:/Users/Fazriansyah/AppData/Local/Temp/opencode/mcp-autoconnect.log";
+const LOG_DIR = join(tmpdir(), "opencode");
+const LOG = join(LOG_DIR, "mcp-autoconnect.log");
+
 function log(message: string) {
   try {
+    mkdirSync(LOG_DIR, { recursive: true });
     appendFileSync(LOG, `${new Date().toISOString()} ${message}\n`);
   } catch {}
 }
