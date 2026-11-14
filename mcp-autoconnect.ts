@@ -4,18 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 /**
- * OpenCode plugin: auto-reconnect MCP servers that fail at startup.
+ * OpenCode plugin: auto-reconnect MCP servers that fail or timeout at startup/runtime.
  *
- * Why: when a Location boots, OpenCode starts every enabled MCP server at once.
- * Local stdio servers (npx/uv cold starts, or rclone-mcp with its 15s internal
- * limit) can run past the startup timeout and stay "failed" forever (see
- * anomalyco/opencode#63512, #53226). This plugin polls the MCP status and
- * retries failed servers through the experimental connect endpoint.
+ * Optimizations implemented:
+ * 1. Non-blocking parallel reconnection for multiple failed servers (using Promise.all).
+ * 2. Expanded status detection to catch "failed", "error", "stopped", or unresponsive states.
+ * 3. Automatic garbage collection of the `attempts` Map for servers that no longer exist or have recovered successfully.
+ * 4. Safer logging and fallback diagnostics.
  *
  * Install: copy this file to ~/.config/opencode/plugins/mcp-autoconnect.ts
- * (global) or .opencode/plugins/mcp-autoconnect.ts (project). It is discovered
- * automatically; no config change required.
- *
+ * (global) or .opencode/plugins/mcp-autoconnect.ts (project).
  * Log: <os temp>/opencode/mcp-autoconnect.log
  */
 const LOG_DIR = join(tmpdir(), "opencode");
@@ -25,7 +23,9 @@ function log(message: string) {
   try {
     mkdirSync(LOG_DIR, { recursive: true });
     appendFileSync(LOG, `${new Date().toISOString()} ${message}\n`);
-  } catch {}
+  } catch (err) {
+    console.warn(`[mcp-autoconnect] Failed to write log: ${String(err)}`);
+  }
 }
 
 const MAX_ATTEMPTS_BEFORE_COOLDOWN = 6;
@@ -68,27 +68,61 @@ export default {
       running = true;
       try {
         const result = await ctx.mcp.list();
-        const failed = (result?.data ?? []).filter(
-          (server: any) => server?.status?.status === "failed",
-        );
-        for (const server of failed) {
-          const name = String(server.name);
-          const now = Date.now();
-          const state = attempts.get(name);
-          const count = state && now - state.last < COOLDOWN_MS ? state.count : 0;
-          if (count >= MAX_ATTEMPTS_BEFORE_COOLDOWN) continue;
-          attempts.set(name, { count: count + 1, last: now });
-          const delay = BACKOFF_MS[Math.min(count, BACKOFF_MS.length - 1)];
-          log(`detected failed: ${name} (attempt ${count + 1}/${MAX_ATTEMPTS_BEFORE_COOLDOWN}), waiting ${delay}ms`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          const ok = await reconnect(name, directory);
-          if (ok) {
-            log(`reconnect succeeded: ${name}`);
+        const servers = result?.data ?? [];
+
+        // Track currently active server names for cleanup
+        const activeNames = new Set<string>();
+
+        const problematic = servers.filter((server: any) => {
+          const name = String(server?.name ?? "");
+          if (name) activeNames.add(name);
+
+          const statusVal = String(server?.status?.status ?? "").toLowerCase();
+          // Catch "failed", "error", "stopped", or empty/disconnected states
+          return (
+            statusVal === "failed" ||
+            statusVal === "error" ||
+            statusVal === "stopped" ||
+            !statusVal ||
+            statusVal === "disconnected"
+          );
+        });
+
+        // Garbage collect attempts Map for servers no longer present or successfully recovered
+        for (const [name] of attempts) {
+          if (!activeNames.has(name)) {
             attempts.delete(name);
-          } else {
-            log(`reconnect failed: ${name}`);
           }
         }
+
+        // Process problematic servers in parallel without sequential blocking delays
+        await Promise.all(
+          problematic.map(async (server: any) => {
+            const name = String(server.name);
+            if (!name) return;
+
+            const now = Date.now();
+            const state = attempts.get(name);
+            const count = state && now - state.last < COOLDOWN_MS ? state.count : 0;
+
+            if (count >= MAX_ATTEMPTS_BEFORE_COOLDOWN) return;
+
+            attempts.set(name, { count: count + 1, last: now });
+            const delay = BACKOFF_MS[Math.min(count, BACKOFF_MS.length - 1)];
+
+            log(`detected unhealthy: ${name} (status: ${server?.status?.status ?? "unknown"}, attempt ${count + 1}/${MAX_ATTEMPTS_BEFORE_COOLDOWN}), waiting ${delay}ms`);
+            
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            
+            const ok = await reconnect(name, directory);
+            if (ok) {
+              log(`reconnect succeeded: ${name}`);
+              attempts.delete(name);
+            } else {
+              log(`reconnect failed: ${name}`);
+            }
+          })
+        );
       } catch (error) {
         log(`tick error ${String(error)}`);
       } finally {
