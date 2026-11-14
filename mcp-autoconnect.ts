@@ -39,6 +39,7 @@ function reconnect(server: string, directory: string): Promise<boolean> {
     const child = spawn("opencode", ["api", "post", url], {
       shell: true,
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
     });
     let out = "";
     child.stdout.on("data", (data) => (out += data.toString()));
