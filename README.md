@@ -41,6 +41,22 @@ curl -fsSL https://raw.githubusercontent.com/arv-fazriansyah/opencode-mcp-autoco
 
 ---
 
+## 🗑️ Uninstall
+
+To remove the plugin and clean up logs, run the uninstaller for your operating system:
+
+### PowerShell (Windows)
+```powershell
+iex (iwr -useb https://raw.githubusercontent.com/arv-fazriansyah/opencode-mcp-autoconnect/main/uninstall.ps1).Content
+```
+
+### Bash (Linux / macOS)
+```bash
+curl -fsSL https://raw.githubusercontent.com/arv-fazriansyah/opencode-mcp-autoconnect/main/uninstall.sh | bash
+```
+
+---
+
 ## Technical Specifications & Backoff Schedule
 
 | Configuration Parameter | Default Value | Description |
